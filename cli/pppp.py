@@ -21,6 +21,19 @@ def _pppp_dumpfile(api, dumpfile):
         api.set_dumper(pktwr)
 
 
+def _pppp_pick_bind_addr(printer_ip):
+    """Pick a local IPv4 interface likely able to reach the printer (same /24 preferred)."""
+    interfaces = list(_pppp_get_interface_ip_addresses())
+    if not interfaces:
+        return None
+    if printer_ip:
+        prefix = ".".join(printer_ip.split(".")[:3]) + "."
+        for ip in interfaces:
+            if ip.startswith(prefix):
+                return ip
+    return interfaces[0]
+
+
 def pppp_open(config, printer_index, timeout=None, dumpfile=None):
     if timeout:
         deadline = datetime.now() + timedelta(seconds=timeout)
@@ -33,10 +46,18 @@ def pppp_open(config, printer_index, timeout=None, dumpfile=None):
         if not printer.ip_addr:
             log.critical(f"Printer IP address not available")
 
-        api = AnkerPPPPApi.open_lan(Duid.from_string(printer.p2p_duid), host=printer.ip_addr)
+        duid = Duid.from_string(printer.p2p_duid)
+        bind_addr = _pppp_pick_bind_addr(printer.ip_addr)
+
+        # Prefer broadcast LAN discovery: V3 firmware often ignores unicast LanSearch
+        # on :32108, but answers broadcast and continues the session on an ephemeral port.
+        api = AnkerPPPPApi.open_lan_broadcast(duid, bind_addr=bind_addr)
         _pppp_dumpfile(api, dumpfile)
 
-        log.info(f"Trying connect to printer {printer.name} ({printer.p2p_duid}) over pppp using ip {printer.ip_addr}")
+        log.info(
+            f"Trying connect to printer {printer.name} ({printer.p2p_duid}) over pppp "
+            f"(broadcast LAN, expected ip {printer.ip_addr}, bind {bind_addr})"
+        )
 
         api.connect_lan_search()
         api.start()
@@ -47,7 +68,7 @@ def pppp_open(config, printer_index, timeout=None, dumpfile=None):
                 api.stop()
                 raise ConnectionRefusedError("Connection rejected by device")
 
-        log.info("Established pppp connection")
+        log.info(f"Established pppp connection to {api.addr}")
         return api
 
 

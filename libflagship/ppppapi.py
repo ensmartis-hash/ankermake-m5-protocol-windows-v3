@@ -192,7 +192,7 @@ class Channel:
     def read(self, nbytes, timeout=None):
         return self.rx.read(nbytes, timeout)
 
-    def write(self, payload, block=True):
+    def write(self, payload, block=True, timeout=None):
         pdata = payload[:]
 
         tx_ctr_start = self.tx_ctr
@@ -207,13 +207,37 @@ class Channel:
 
         tx_ctr_done = self.tx_ctr
 
-        while block:
-            # if doing a blocking write, loop on self.event until we have
-            # received acknowledgment of our data
-            self.wait()
+        if not block:
+            return (tx_ctr_start, tx_ctr_done)
 
+        # if doing a blocking write, loop on self.event until we have
+        # received acknowledgment of our data (optional overall timeout)
+        wait_deadline = None
+        if timeout is not None:
+            wait_deadline = datetime.now() + timedelta(seconds=timeout)
+
+        while True:
             if self.tx_ack >= tx_ctr_done:
                 break
+
+            remaining = None
+            if wait_deadline is not None:
+                remaining = (wait_deadline - datetime.now()).total_seconds()
+                if remaining <= 0:
+                    raise TimeoutError(
+                        f"Channel {self.index} write ACK timeout "
+                        f"(acked {self.tx_ack}, need {tx_ctr_done})"
+                    )
+
+            if remaining is None:
+                self.wait()
+            else:
+                if not self.event.wait(timeout=remaining):
+                    raise TimeoutError(
+                        f"Channel {self.index} write ACK timeout "
+                        f"(acked {self.tx_ack}, need {tx_ctr_done})"
+                    )
+                self.event.clear()
 
         return (tx_ctr_start, tx_ctr_done)
 
@@ -254,13 +278,24 @@ class AnkerPPPPBaseApi(Thread):
         return cls.open(duid, host, PPPP_WAN_PORT)
 
     @classmethod
-    def open_broadcast(cls, bind_addr=None):
+    def open_broadcast(cls, bind_addr=None, duid=None):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         if bind_addr is not None:
             sock.bind((bind_addr, 0))
         addr = ("255.255.255.255", PPPP_LAN_PORT)
-        return cls(sock, duid=None, addr=addr)
+        return cls(sock, duid=duid, addr=addr)
+
+    @classmethod
+    def open_lan_broadcast(cls, duid, bind_addr=None):
+        """
+        Open a LAN session using UDP broadcast discovery.
+
+        Some AnkerMake / eufyMake firmware (notably V3) does not answer unicast
+        PktLanSearch on port 32108, but still responds to broadcast. Discovery
+        replies come from an ephemeral port; the handshake continues there.
+        """
+        return cls.open_broadcast(bind_addr=bind_addr, duid=duid)
 
     def connect_lan_search(self):
         self.state = PPPPState.Connecting
@@ -342,6 +377,11 @@ class AnkerPPPPBaseApi(Thread):
 
         elif msg.type == Type.PUNCH_PKT:
             if self.state == PPPPState.Connecting:
+                # Ignore advertisements from other printers on the LAN
+                if self.duid is not None and getattr(msg, "duid", None) is not None:
+                    if str(msg.duid) != str(self.duid):
+                        log.debug(f"Ignoring PunchPkt from other device {msg.duid}")
+                        return
                 self.send(PktClose())
                 self.send(PktP2pRdy(self.duid))
 
@@ -368,7 +408,7 @@ class AnkerPPPPBaseApi(Thread):
         log.debug(f"TX  --> {str(msg)[:128]}")
         self.sock.sendto(resp, addr or self.addr)
 
-    def send_xzyh(self, data, cmd, chan=0, unk0=0, unk1=0, sign_code=0, unk3=0, dev_type=0, block=True):
+    def send_xzyh(self, data, cmd, chan=0, unk0=0, unk1=0, sign_code=0, unk3=0, dev_type=0, block=True, timeout=None):
         xzyh = Xzyh(
             cmd=cmd,
             len=len(data),
@@ -381,9 +421,9 @@ class AnkerPPPPBaseApi(Thread):
             dev_type=dev_type
         )
 
-        return self.chans[chan].write(xzyh.pack(), block=block)
+        return self.chans[chan].write(xzyh.pack(), block=block, timeout=timeout)
 
-    def send_aabb(self, data, sn=0, pos=0, frametype=0, chan=1, block=True):
+    def send_aabb(self, data, sn=0, pos=0, frametype=0, chan=1, block=True, timeout=None):
         aabb = Aabb(
             frametype=frametype,
             sn=sn,
@@ -391,7 +431,7 @@ class AnkerPPPPBaseApi(Thread):
             len=len(data)
         )
 
-        return self.chans[chan].write(aabb.pack_with_crc(data), block=block)
+        return self.chans[chan].write(aabb.pack_with_crc(data), block=block, timeout=timeout)
 
 
 class AnkerPPPPApi(AnkerPPPPBaseApi):

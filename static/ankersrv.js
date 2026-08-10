@@ -334,9 +334,12 @@ $(function () {
      */
     sockets = {};
 
+    // Always build ws://host/... (protocol is "http:" / "https:")
+    const wsBase = `${location.protocol.replace('http', 'ws')}//${location.host}`;
+
     sockets.mqtt = new AutoWebSocket({
         name: "mqtt socket",
-        url: `${location.protocol.replace('http','ws')}//${location.host}/ws/mqtt`,
+        url: `${wsBase}/ws/mqtt`,
         badge: "#badge-mqtt",
 
         opened: function (event) {
@@ -414,52 +417,63 @@ $(function () {
      */
     sockets.video = new AutoWebSocket({
         name: "Video socket",
-        url: `${location.protocol.replace('http','ws')}${location.host}/ws/video`,
+        url: `${wsBase}/ws/video`,
         badge: "#badge-video",
         binary: true,
+        reconnect: 1500,
 
         open: function () {
+            // Recreate decoder on each socket open (after drop/reconnect)
+            if (this.jmuxer) {
+                try { this.jmuxer.destroy(); } catch (e) {}
+                this.jmuxer = null;
+            }
             this.jmuxer = new JMuxer({
                 node: "player",
                 mode: "video",
-                flushingTime: 0,
+                flushingTime: 500,
                 fps: 15,
+                clearBuffer: true,
                 // debug: true,
                 onReady: function (data) {
-                    console.log(data);
+                    console.log("jmuxer ready", data);
                 },
                 onError: function (data) {
-                    console.log(data);
+                    console.log("jmuxer error", data);
                 },
             });
         },
 
         message: function (event) {
-            this.jmuxer.feed({
-                video: new Uint8Array(event.data),
-            });
+            if (!this.jmuxer) return;
+            try {
+                this.jmuxer.feed({
+                    video: new Uint8Array(event.data),
+                });
+            } catch (e) {
+                console.log("jmuxer feed error", e);
+            }
         },
 
         close: function () {
-            if (!this.jmuxer)
-                return;
-
-            this.jmuxer.destroy();
-
-            /* Clear video source (to show loading animation) */
-            $("#player").attr("src", "");
+            // Soft teardown: keep last frame until new stream starts.
+            // Avoid immediately clearing the player (that forces "loading please wait").
+            if (this.jmuxer) {
+                try { this.jmuxer.destroy(); } catch (e) {}
+                this.jmuxer = null;
+            }
         },
     });
 
     sockets.ctrl = new AutoWebSocket({
         name: "Control socket",
-        url: `${location.protocol.replace('http','ws')}${location.host}/ws/ctrl`,
+        url: `${wsBase}/ws/ctrl`,
         badge: "#badge-ctrl",
     });
 
     sockets.pppp_state = new AutoWebSocket({
         name: "PPPP socket",
-        url: `${location.protocol.replace('http','ws')}//${location.host}/ws/pppp-state`,
+        url: `${wsBase}/ws/pppp-state`,
         badge: "#badge-pppp",
     });
 

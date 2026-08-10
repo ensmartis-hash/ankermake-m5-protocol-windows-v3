@@ -124,7 +124,8 @@ class Service(Thread):
             self.worker_run(timeout=0.1)
         except ServiceRestartSignal:
             log.info(f"{self.name}: Service requested restart.")
-            self._holdoff.reset(delay=10)
+            # 3s is enough to avoid thrash; 10s felt "stuck" in the UI
+            self._holdoff.reset(delay=3)
             self.state = RunState.Stopping
         except Exception:
             log.exception(f"{self.name}: Unexpected exception while running worker")
@@ -359,7 +360,23 @@ class ServiceManager:
                 queue = Queue()
 
                 with svc.tap(lambda data: queue.put(data)):
-                    while svc.state == RunState.Running:
-                        yield queue.get(timeout=timeout)
-        except (EOFError, OSError, ServiceStoppedError, Empty):
+                    # Keep yielding while service is alive. Treat empty-queue
+                    # timeouts as "no data yet", not as end-of-stream — that
+                    # way brief video/pppp gaps do not kill the websocket.
+                    import time as _time
+                    while svc.running and svc.wanted and svc.state in (
+                        RunState.Running, RunState.Starting, RunState.Stopping
+                    ):
+                        if svc.state != RunState.Running:
+                            # Service is restarting; wait briefly without ending stream
+                            _time.sleep(0.2)
+                            continue
+                        try:
+                            yield queue.get(timeout=timeout if timeout is not None else 1.0)
+                        except Empty:
+                            # No message this interval — keep waiting while service lives
+                            continue
+        except (EOFError, OSError, ServiceStoppedError):
+            return
+        except Empty:
             return

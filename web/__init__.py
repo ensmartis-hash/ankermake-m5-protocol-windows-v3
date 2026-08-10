@@ -87,37 +87,105 @@ def video(sock):
     """
     if not app.config["login"] or not app.config["video_supported"]:
         return
-    for msg in app.svc.stream("videoqueue"):
-        sock.send(msg.data)
+
+    import time
+
+    # During file upload we must not start video — it steals the PPPP session
+    # and is exactly what broke web/Orca transfers (browser reconnect spam).
+    while app.config.get("suspend_video") or app.config.get("transfer_in_progress"):
+        try:
+            time.sleep(0.5)
+            # Keep socket barely alive until transfer finishes, then exit so
+            # the client reconnects cleanly afterward.
+            if not app.config.get("suspend_video") and not app.config.get("transfer_in_progress"):
+                break
+        except Exception:
+            return
+        # Cap wait so we don't hold forever if flags get stuck
+        # (client will reconnect via AutoWebSocket)
+        # fall through after transfer ends
+
+    if app.config.get("suspend_video") or app.config.get("transfer_in_progress"):
+        return
+
+    try:
+        for msg in app.svc.stream("videoqueue", timeout=30.0):
+            if app.config.get("suspend_video") or app.config.get("transfer_in_progress"):
+                break
+            try:
+                sock.send(msg.data)
+            except Exception as E:
+                log.debug(f"video websocket send failed: {E}")
+                break
+    except Exception as E:
+        log.debug(f"video websocket ended: {E}")
 
 
 @sock.route("/ws/pppp-state")
 def pppp_state(sock):
     """
-    Handles a status request for the 'pppp' stream service through websocket
+    Report PPPP connection status over websocket.
+
+    Important: do NOT use stream(..., timeout=3) here. On many firmwares (incl. V3)
+    idle PPPP sessions do not emit packets every second, so a short queue timeout
+    would drop the borrow, stop PPPP, and restart in a loop — which freezes the UI
+    ("loading please wait") and breaks Orca uploads mid-transfer.
     """
     if not app.config["login"]:
         return
 
-    pppp_connected = False
+    import time
 
-    # A timeout of 3 sec should be fine, as the printer continuously sends
-    # PktAlive messages every second on an established connection.
-    for chan, msg in app.svc.stream("pppp", timeout=3.0):
-        if not pppp_connected:
-            with app.svc.borrow("pppp") as pppp:
-                if pppp.connected:
-                    pppp_connected = True
-                    # this is the only message ever sent on this connection
-                    # to signal that the pppp connection is up
+    try:
+        # Hold a borrow for the lifetime of this websocket so PPPP stays up while
+        # the UI is open (and while Orca may be uploading via the same server).
+        with app.svc.borrow("pppp") as pppp:
+            # Wait up to ~20s for the initial connection
+            deadline = time.time() + 20
+            while time.time() < deadline:
+                if pppp.connected and pppp.state == RunState.Running:
                     sock.send(json.dumps({"status": "connected"}))
-                    log.info(f"PPPP connection established")
-    if not pppp_connected:
-        log.warning(f'[{datetime.now().strftime("%d/%b/%Y %H:%M:%S")}] PPPP connection lost, restarting PPPPService')
-        try:
-            app.svc.get("pppp").worker_start()
-        except TimeoutError:
-            app.svc.get("pppp").restart()
+                    log.info("PPPP connection established")
+                    break
+                time.sleep(0.25)
+            else:
+                log.warning("PPPP did not become ready for websocket client")
+                try:
+                    sock.send(json.dumps({"status": "error", "message": "pppp not connected"}))
+                except Exception:
+                    pass
+                return
+
+            # Keep the socket (and borrow) open until the client disconnects or
+            # the underlying PPPP session drops. Soft-reconnect without thrashing.
+            while True:
+                if not (pppp.connected and pppp.state == RunState.Running):
+                    log.warning("PPPP session dropped while UI connected; waiting for auto-restart")
+                    try:
+                        sock.send(json.dumps({"status": "reconnecting"}))
+                    except Exception:
+                        return
+                    # Service thread restarts itself on CLOSE; wait for it.
+                    wait_deadline = time.time() + 30
+                    while time.time() < wait_deadline:
+                        if pppp.connected and pppp.state == RunState.Running:
+                            try:
+                                sock.send(json.dumps({"status": "connected"}))
+                            except Exception:
+                                return
+                            log.info("PPPP connection re-established")
+                            break
+                        time.sleep(0.5)
+                    else:
+                        log.warning("PPPP failed to recover; closing pppp-state websocket")
+                        return
+                # Block briefly for optional client messages / disconnect detection.
+                # flask-sock has no receive timeout; use a short sleep poll instead.
+                time.sleep(1.0)
+    except ServiceStoppedError as E:
+        log.warning(f"PPPP service unavailable: {E}")
+    except Exception as E:
+        log.exception(f"pppp-state websocket error: {E}")
 
 
 @sock.route("/ws/ctrl")
@@ -373,6 +441,7 @@ def app_api_ankerctl_server_internal_reload(success_message: str=None):
         app.config["video_supported"] = any([printer.model not in PRINTERS_WITHOUT_CAMERA for printer in cfg.printers])
         if cfg.printers and not app.svc.svcs:
             register_services(app)
+            start_persistent_services(app)
 
     try:
         app.svc.restart_all(await_ready=False)
@@ -478,6 +547,24 @@ def register_services(app):
     app.svc.register("filetransfer", web.service.filetransfer.FileTransferService())
 
 
+def start_persistent_services(app):
+    """
+    Keep core services running for the lifetime of the webserver.
+
+    Without this, the first websocket/stream that times out can call put()
+    with refcount 0 and stop PPPP — which is exactly when Orca uploads hang.
+    """
+    for name in ("pppp", "mqttqueue"):
+        if name not in app.svc:
+            continue
+        try:
+            # Permanent reference: never put() these for server lifetime
+            app.svc.get(name, ready=False)
+            log.info(f"Persistent service acquired: {name}")
+        except Exception as E:
+            log.warning(f"Could not start persistent service {name}: {E}")
+
+
 def webserver(config, printer_index, host, port, insecure=False, **kwargs):
     """
     Starts the Flask webserver
@@ -511,4 +598,7 @@ def webserver(config, printer_index, host, port, insecure=False, **kwargs):
         app.config.update(kwargs)
         if cfg.printers:
             register_services(app)
-        app.run(host=host, port=port)
+            start_persistent_services(app)
+        # threaded=True is required so Orca/OctoPrint uploads are not blocked by
+        # open browser websocket connections (mqtt/video/pppp-state).
+        app.run(host=host, port=port, threaded=True)
