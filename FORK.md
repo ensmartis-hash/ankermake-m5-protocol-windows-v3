@@ -32,8 +32,8 @@ On current eufyMake / M5 V3 setups we observed:
 ## Windows quick start
 
 ```powershell
-git clone --recurse-submodules https://github.com/<YOU>/ankermake-m5-protocol.git
-cd ankermake-m5-protocol
+git clone --recurse-submodules https://github.com/ensmartis-hash/ankermake-m5-protocol-windows-v3.git
+cd ankermake-m5-protocol-windows-v3
 python -m pip install -r requirements.txt
 python ankerctl.py webserver run --host 0.0.0.0 --port 4470
 ```
