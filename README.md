@@ -1,6 +1,8 @@
 ﻿> **This is a community fork** with fixes for **Windows + eufyMake + M5 firmware V3**  
 > (broadcast PPPP, exclusive Orca/web uploads, video suspend during transfer).  
-> See **[FORK.md](FORK.md)** for details. Upstream: [anselor/ankermake-m5-protocol](https://github.com/anselor/ankermake-m5-protocol).
+> See **[FORK.md](FORK.md)** for overview and **[documentation/transfer-integrity.md](documentation/transfer-integrity.md)**  
+> for how file transfers stay safe over UDP (ACK, CRC-16, MD5).  
+> Upstream: [anselor/ankermake-m5-protocol](https://github.com/anselor/ankermake-m5-protocol).
 # AnkerMake M5 Protocol
 
 Welcome! This repository contains `ankerctl`, a command-line interface and web UI for monitoring, controlling and interfacing with AnkerMake M5 and M5C 3D printers.

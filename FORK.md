@@ -28,6 +28,20 @@ On current eufyMake / M5 V3 setups we observed:
 | Websockets | Correct `ws://` URLs; longer stream timeouts |
 | Channel I/O | Write ACK timeouts; non-blocking frame parse (avoid deadlocks) |
 | Windows helpers | `start-ankerctl.bat`, `start-ankerctl.ps1`, `login-ankerctl.ps1` |
+| Large uploads | Smaller PPPP chunks, limited in-flight packets, chunk + full-transfer retries |
+
+## Transfer safety (UDP is not “no integrity”)
+
+Print jobs use **PPPP over UDP**, but the protocol is **not** bare datagrams:
+
+| Layer | What it does |
+|-------|----------------|
+| DRW + **ACK** + retransmit | Lost packets are resent; stall → upload **fails** (no silent success) |
+| AABB **CRC-16** | Each file-transfer frame is checksummed |
+| File header **MD5** | Full gcode fingerprint sent before bulk data |
+| **FileTransferReply** | Printer ACKs BEGIN / DATA / END steps |
+
+Details: **[documentation/transfer-integrity.md](documentation/transfer-integrity.md)**.
 
 ## Windows quick start
 
