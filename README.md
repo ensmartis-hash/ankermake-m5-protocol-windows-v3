@@ -1,4 +1,4 @@
-﻿> **This is a community fork** with fixes for **Windows + eufyMake + M5 firmware V3**  
+> **This is a community fork** with fixes for **Windows + eufyMake + M5 firmware V3**  
 > (broadcast PPPP, exclusive Orca/web uploads, video suspend during transfer).  
 > See **[FORK.md](FORK.md)** for overview and **[documentation/transfer-integrity.md](documentation/transfer-integrity.md)**  
 > for how file transfers stay safe over UDP (ACK, CRC-16, MD5).  
@@ -109,7 +109,7 @@ Follow the instructions for a [git install](documentation/install-from-git.md) (
 > **NOTE:** 
 > The cached login info contains sensitive details. In particular, the `user_id` field is used when connecting to MQTT servers, and essentially works as a password. Thus, the end of the value is redacted when printed to screen, to avoid accidentally disclosing sensitive information.
 
-2. Now that the printer information is known to `ankerctl`, the tool is ready to use. Thereâ€™s a lot of available commands and utilities, use a command followed by `-h` to learn what your options are and get more in specific usage instructions.
+2. Now that the printer information is known to `ankerctl`, the tool is ready to use. There's a lot of available commands and utilities, use a command followed by `-h` to learn what your options are and get more in specific usage instructions.
 
 > **NOTE:**
 > As an alternative to using "config import" on the command line, it is possible to upload `login.json` through the web interface. Either method will work fine.
@@ -118,7 +118,7 @@ Follow the instructions for a [git install](documentation/install-from-git.md) (
 
 ### Web Interface
 
-1. Start the webserver by running one of the following commands in the folder you placed ankerctl in. Youâ€™ll need to have this running whenever you want to use the web interface or send jobs to the printer via a slicer:
+1. Start the webserver by running one of the following commands in the folder you placed ankerctl in. You'll need to have this running whenever you want to use the web interface or send jobs to the printer via a slicer:
 
    Docker Installation Method:
 
@@ -135,14 +135,14 @@ Follow the instructions for a [git install](documentation/install-from-git.md) (
 2. Navigate to [http://localhost:4470](http://localhost:4470) in your browser of choice on the same computer the webserver is running on. 
  
  > **Important**
- > If your `login.json` file was not automatically found, youâ€™ll be prompted to upload your `login.json` file and the given the default path it should be found in your corresponding Operating System. 
+ > If your `login.json` file was not automatically found, you'll be prompted to upload your `login.json` file and the given the default path it should be found in your corresponding Operating System. 
    Once the `login.json` has been uploaded, the page will refresh and the web interface is usable.
 
 ### Printing Directly from PrusaSlicer
 
-ankerctl can allow slicers like PrusaSlicer (and its derivatives) to send print jobs to the printer using the slicerâ€™s built in communications tools. The web server must be running in order to send jobs to the printer. 
+ankerctl can allow slicers like PrusaSlicer (and its derivatives) to send print jobs to the printer using the slicer's built in communications tools. The web server must be running in order to send jobs to the printer. 
 
-Currently thereâ€™s no way to store the jobs for later printing on the printer, so youâ€™re limited to using the â€œSend and Printâ€ option only to immediately start the print once itâ€™s been transmitted. 
+Currently there's no way to store the jobs for later printing on the printer, so you're limited to using the "Send and Print" option only to immediately start the print once it's been transmitted. 
 
 Additional instructions can be found in the web interface.
 
@@ -184,7 +184,7 @@ This project is **<u>NOT</u>** endorsed, affiliated with, or supported by AnkerM
 
 The goal of this project is to make the AnkerMake M5 and M5C usable and accessible using only Free and Open Source Software (FOSS).
 
-This project is [licensed under the GNU GPLv3](LICENSE), and copyright Â© 2023 Christian Iversen.
+This project is [licensed under the GNU GPLv3](LICENSE), and copyright © 2023 Christian Iversen.
 
 Some icons from [IconFinder](https://www.iconfinder.com/iconsets/3d-printing-line), and licensed under [Creative Commons](https://creativecommons.org/licenses/by/3.0/)
 

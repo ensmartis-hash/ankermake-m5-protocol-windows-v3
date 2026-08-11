@@ -361,7 +361,7 @@ class ServiceManager:
 
                 with svc.tap(lambda data: queue.put(data)):
                     # Keep yielding while service is alive. Treat empty-queue
-                    # timeouts as "no data yet", not as end-of-stream — that
+                    # timeouts as "no data yet", not as end-of-stream - that
                     # way brief video/pppp gaps do not kill the websocket.
                     import time as _time
                     while svc.running and svc.wanted and svc.state in (
@@ -374,7 +374,7 @@ class ServiceManager:
                         try:
                             yield queue.get(timeout=timeout if timeout is not None else 1.0)
                         except Empty:
-                            # No message this interval — keep waiting while service lives
+                            # No message this interval - keep waiting while service lives
                             continue
         except (EOFError, OSError, ServiceStoppedError):
             return

@@ -1,4 +1,4 @@
-# ankerctl — Windows / eufyMake / Firmware V3 fork
+# ankerctl - Windows / eufyMake / Firmware V3 fork
 
 This fork is based on [anselor/ankermake-m5-protocol](https://github.com/anselor/ankermake-m5-protocol)
 (itself a maintained fork of the original Ankermgmt project).
@@ -10,12 +10,12 @@ Orca Slicer / web uploads and PPPP connectivity on modern printers.
 
 On current eufyMake / M5 V3 setups we observed:
 
-1. **No `login.json`** from eufyMake Studio — use email/password login (from anselor).
-2. **PPPP unicast LAN connect fails** — printer only answers **broadcast** discovery and
+1. **No `login.json`** from eufyMake Studio - use email/password login (from anselor).
+2. **PPPP unicast LAN connect fails** - printer only answers **broadcast** discovery and
    continues on an ephemeral UDP port.
-3. **Web/Orca uploads hang** — the browser video websocket reconnects mid-transfer and
+3. **Web/Orca uploads hang** - the browser video websocket reconnects mid-transfer and
    steals the PPPP session from file transfer.
-4. **“Loading please wait” / PPPP restart loops** — aggressive websocket timeouts and
+4. **"Loading please wait" / PPPP restart loops** - aggressive websocket timeouts and
    shared-service teardown dropped the link continuously.
 
 ## What changed
@@ -30,7 +30,7 @@ On current eufyMake / M5 V3 setups we observed:
 | Windows helpers | `start-ankerctl.bat`, `start-ankerctl.ps1`, `login-ankerctl.ps1` |
 | Large uploads | Smaller PPPP chunks, limited in-flight packets, chunk + full-transfer retries |
 
-## Transfer safety (UDP is not “no integrity”)
+## Transfer safety (UDP is not "no integrity")
 
 Print jobs use **PPPP over UDP**, but the protocol is **not** bare datagrams:
 
@@ -80,6 +80,6 @@ python ankerctl.py pppp print-file path\to\file.gcode
 
 - Original project: [Ankermgmt/ankermake-m5-protocol](https://github.com/Ankermgmt/ankermake-m5-protocol)
 - Maintained fork / login: [anselor/ankermake-m5-protocol](https://github.com/anselor/ankermake-m5-protocol)
-- Additional upstream work cited in anselor’s history (exiles, sondregronas, and others)
+- Additional upstream work cited in anselor's history (exiles, sondregronas, and others)
 
 Not affiliated with Anker / eufyMake.

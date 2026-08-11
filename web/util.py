@@ -129,7 +129,7 @@ def _exclusive_pppp_connect(config, printer_index, timeout=20.0):
 
 def _exclusive_send_file(api, fui, data):
     """Send gcode using timed channel writes (never hang forever)."""
-    # Cap in-flight DRW packets — flooding the M5 over Wi‑Fi causes mid-transfer
+    # Cap in-flight DRW packets - flooding the M5 over Wi‑Fi causes mid-transfer
     # ACK stalls (e.g. "acked 35, need 52") on larger gcodes.
     for ch in api.chans:
         ch.max_in_flight = 12
@@ -189,7 +189,7 @@ def _send_data_chunk_with_retry(api, chunk, pos, attempts=4):
             time.sleep(0.15 * attempt)
     raise ConnectionError(
         f"Upload stalled at byte {pos} after {attempts} tries: {last_err}. "
-        f"Usually Wi‑Fi packet loss or printer busy — retry the send."
+        f"Usually Wi‑Fi packet loss or printer busy - retry the send."
     ) from last_err
 
 
@@ -245,7 +245,7 @@ def upload_file_to_printer(app, file):
     filename = getattr(file, "filename", None) or getattr(file, "name", "upload.gcode")
 
     if not data:
-        raise ConnectionError("Empty file — nothing to upload")
+        raise ConnectionError("Empty file - nothing to upload")
 
     fui = FileUploadInfo.from_data(
         data, filename, user_name=user_name, user_id="-", machine_id="-"
@@ -272,7 +272,7 @@ def upload_file_to_printer(app, file):
         config = app.config["config"]
         printer_index = app.config.get("printer_index", 0)
 
-        # Full-transfer retries: large gcodes (~5–10 MB) occasionally hit Wi‑Fi
+        # Full-transfer retries: large gcodes (~5-10 MB) occasionally hit Wi‑Fi
         # ACK loss mid-stream; a clean reconnect often succeeds on try 2.
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):

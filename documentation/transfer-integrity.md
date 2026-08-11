@@ -1,12 +1,12 @@
 # File transfer integrity (PPPP over UDP)
 
 ankerctl sends print jobs to the AnkerMake M5 over **PPPP**, which uses **UDP** on the
-local network. UDP by itself does **not** guarantee delivery or integrity — packets can
+local network. UDP by itself does **not** guarantee delivery or integrity - packets can
 be lost, reordered, or corrupted.
 
-That does **not** mean transfers are “fire and forget.” The Anker protocol (as implemented
+That does **not** mean transfers are "fire and forget." The Anker protocol (as implemented
 in `libflagship`) stacks several reliability and integrity mechanisms on top of UDP.
-A successful “print job sent” means those layers completed; a failure (timeout / 503)
+A successful "print job sent" means those layers completed; a failure (timeout / 503)
 means the transfer was **aborted** rather than silently accepted as complete.
 
 ## Overview
@@ -29,7 +29,7 @@ Orca / web UI / CLI
    AnkerMake M5
 ```
 
-## Layer 1 — Reliable delivery (DRW + ACK)
+## Layer 1 - Reliable delivery (DRW + ACK)
 
 File payload is split into small **DRW** (data read/write) packets on a logical channel
 (channel 1 for file transfer).
@@ -50,9 +50,9 @@ Channel 1 write ACK timeout (acked 35, need 52)
 
 Meaning: the PC sent packets that needed ACKs through index 52, but the printer only
 confirmed through 35 within the timeout (Wi‑Fi loss, congestion, or printer busy).
-ankerctl **stops** and reports an error so Orca/web can retry — it does not claim success.
+ankerctl **stops** and reports an error so Orca/web can retry - it does not claim success.
 
-## Layer 2 — Per-frame CRC (AABB)
+## Layer 2 - Per-frame CRC (AABB)
 
 Each file-transfer control/data block is wrapped in an **AABB** frame:
 
@@ -60,16 +60,16 @@ Each file-transfer control/data block is wrapped in an **AABB** frame:
 [AABB header][payload bytes][CRC-16]
 ```
 
-- CRC is computed with Anker’s PPPP CRC-16 (`ppcs_crc16` in `libflagship/util.py`).
+- CRC is computed with Anker's PPPP CRC-16 (`ppcs_crc16` in `libflagship/util.py`).
 - Pack: `Aabb.pack_with_crc(data)`
-- Unpack: `Aabb.parse_with_crc(...)` — CRC mismatch is rejected.
+- Unpack: `Aabb.parse_with_crc(...)` - CRC mismatch is rejected.
 
 So random bit-flips inside a transfer frame are detectable by the receiver of that frame.
-This is **not** “UDP with no checksum at the application layer.”
+This is **not** "UDP with no checksum at the application layer."
 
 Relevant code: `libflagship/pppp.py` (`Aabb.pack_with_crc` / `parse_with_crc`).
 
-## Layer 3 — Whole-file MD5 in the transfer header
+## Layer 3 - Whole-file MD5 in the transfer header
 
 Before bulk data, ankerctl sends a **BEGIN** metadata record (`FileUploadInfo`), including:
 
@@ -92,24 +92,24 @@ bytes before any chunk is sent. The printer is given a fingerprint of the intend
 > **Note:** Whether every firmware build always re-hashes the file after reassembly and
 > refuses to print on mismatch is **inside closed Anker firmware**. Open reverse-engineering
 > confirms the MD5 is **sent**; ankerctl does not currently log a separate
-> “printer verified MD5: OK” message. In practice, a completed transfer with all step
+> "printer verified MD5: OK" message. In practice, a completed transfer with all step
 > replies OK is the best open-source signal you get.
 
-## Layer 4 — Step replies (FileTransferReply)
+## Layer 4 - Step replies (FileTransferReply)
 
 Transfer is a small state machine:
 
-1. **P2P_SEND_FILE** — open a file send session  
-2. **BEGIN** — metadata (name, size, MD5, …)  
-3. **DATA** — file chunks with offset  
-4. **END** — finish and request print start (when printing)
+1. **P2P_SEND_FILE** - open a file send session  
+2. **BEGIN** - metadata (name, size, MD5, ...)  
+3. **DATA** - file chunks with offset  
+4. **END** - finish and request print start (when printing)
 
 After BEGIN / DATA / END, the printer returns a **FileTransferReply** (e.g. OK).
 ankerctl treats non-OK replies as failure (`PPPPError`).
 
 So the printer is actively acknowledging protocol steps, not only ACKing raw UDP packets.
 
-## What “success” and “failure” mean
+## What "success" and "failure" mean
 
 | Outcome | Interpretation |
 |---------|----------------|
@@ -130,8 +130,8 @@ So the printer is actively acknowledging protocol steps, not only ACKing raw UDP
 1. Prefer a **stable 2.4 GHz** link (M5 is not 5 GHz).  
 2. Keep **eufyMake Studio** closed during uploads (one PPPP client).  
 3. Printer should be **idle** before a new job.  
-4. Large files (~5–10+ MB) are more sensitive to Wi‑Fi blips; this fork retries chunks and
-   full transfers — if you still see ACK timeouts, retry once or use CLI:
+4. Large files (~5-10+ MB) are more sensitive to Wi‑Fi blips; this fork retries chunks and
+   full transfers - if you still see ACK timeouts, retry once or use CLI:
    `python ankerctl.py pppp print-file path\to\file.gcode`  
 5. A print that **starts after a reported success** is the best real-world confirmation.
 
@@ -150,7 +150,7 @@ So the printer is actively acknowledging protocol steps, not only ACKing raw UDP
 
 **UDP is the transport. Reliability and integrity are application-level:**
 
-- **ACKs + retransmit** → don’t finish with missing pieces  
+- **ACKs + retransmit** → don't finish with missing pieces  
 - **CRC-16 per AABB frame** → detect corrupted chunks  
 - **MD5 of full file in BEGIN** → fingerprint of the intended gcode  
 - **FileTransferReply OK** → printer accepted each transfer step  

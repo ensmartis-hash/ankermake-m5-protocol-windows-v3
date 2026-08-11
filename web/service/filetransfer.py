@@ -87,7 +87,7 @@ class FileTransferService(Service):
                 )
 
             # Match CLI path: request transfer, then BEGIN/DATA/END with ACKs.
-            # Timeout on the initial XZYH write — this is where Orca was hanging
+            # Timeout on the initial XZYH write - this is where Orca was hanging
             # when the PPPP worker was stuck parsing video frames.
             log.info("Requesting file transfer..")
             try:

@@ -80,7 +80,7 @@ class VideoQueue(Service):
             if self.saved_video_mode is not None:
                 self.api_video_mode(self.saved_video_mode)
             else:
-                # Prefer SD by default — more stable over Wi‑Fi than HD
+                # Prefer SD by default - more stable over Wi‑Fi than HD
                 self.api_video_mode(0)
             self._last_restart_live = time.time()
             self._last_frame_at = time.time()
@@ -107,7 +107,7 @@ class VideoQueue(Service):
             time.sleep(0.25)
 
         if not self._bind_pppp_and_start_live():
-            # Stay running and retry in worker_run — do not fail start (that
+            # Stay running and retry in worker_run - do not fail start (that
             # would tear down the websocket and flash "loading please wait").
             log.warning(f"{self.name}: PPPP not ready yet; will retry START_LIVE")
             self.api_id = None

@@ -90,7 +90,7 @@ def video(sock):
 
     import time
 
-    # During file upload we must not start video — it steals the PPPP session
+    # During file upload we must not start video - it steals the PPPP session
     # and is exactly what broke web/Orca transfers (browser reconnect spam).
     while app.config.get("suspend_video") or app.config.get("transfer_in_progress"):
         try:
@@ -128,7 +128,7 @@ def pppp_state(sock):
 
     Important: do NOT use stream(..., timeout=3) here. On many firmwares (incl. V3)
     idle PPPP sessions do not emit packets every second, so a short queue timeout
-    would drop the borrow, stop PPPP, and restart in a loop — which freezes the UI
+    would drop the borrow, stop PPPP, and restart in a loop - which freezes the UI
     ("loading please wait") and breaks Orca uploads mid-transfer.
     """
     if not app.config["login"]:
@@ -552,7 +552,7 @@ def start_persistent_services(app):
     Keep core services running for the lifetime of the webserver.
 
     Without this, the first websocket/stream that times out can call put()
-    with refcount 0 and stop PPPP — which is exactly when Orca uploads hang.
+    with refcount 0 and stop PPPP - which is exactly when Orca uploads hang.
     """
     for name in ("pppp", "mqttqueue"):
         if name not in app.svc:

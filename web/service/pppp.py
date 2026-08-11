@@ -113,7 +113,7 @@ class PPPPService(Service):
         try:
             aabb = Aabb.parse(hdr)[0]
         except Exception:
-            # Not a valid AABB header — drop 1 byte to resync
+            # Not a valid AABB header - drop 1 byte to resync
             fd.read(1, timeout=0)
             return None, None
         total = 12 + aabb.len + 2
@@ -135,11 +135,11 @@ class PPPPService(Service):
             msg = self._api.poll(timeout=timeout)
         except ConnectionResetError:
             # Printer closed the session (normal after a print, or contention).
-            # Restart with holdoff — do not tight-loop.
+            # Restart with holdoff - do not tight-loop.
             log.warning(f"{self.name}: printer closed PPPP session; will reconnect")
             raise ServiceRestartSignal()
         except OSError as E:
-            # WinError 10038 etc. when socket was closed for exclusive upload — expected
+            # WinError 10038 etc. when socket was closed for exclusive upload - expected
             if not hasattr(self, "_api"):
                 return
             log.debug(f"{self.name}: socket error during stop/reconnect: {E}")
@@ -184,7 +184,7 @@ class PPPPService(Service):
                 elif data[:2] == b'\xAA\xBB':
                     aabb, payload = self._try_recv_aabb(ch, timeout=0)
                     if aabb is None:
-                        # Incomplete AABB — wait for more data; do NOT drop bytes
+                        # Incomplete AABB - wait for more data; do NOT drop bytes
                         # (dropping corrupts the video XZYH stream on channel 1).
                         return
                     # File-transfer ACKs are 1 byte
@@ -192,7 +192,7 @@ class PPPPService(Service):
                         aabb.data = payload
                         self.notify((msg.chan, aabb))
                 else:
-                    # Incomplete prefix of XZYH/AABB — wait for more bytes.
+                    # Incomplete prefix of XZYH/AABB - wait for more bytes.
                     # Never discard data here; video frames are easily corrupted.
                     return
 
