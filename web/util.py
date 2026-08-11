@@ -129,6 +129,12 @@ def _exclusive_pppp_connect(config, printer_index, timeout=20.0):
 
 def _exclusive_send_file(api, fui, data):
     """Send gcode using timed channel writes (never hang forever)."""
+    # Cap in-flight DRW packets — flooding the M5 over Wi‑Fi causes mid-transfer
+    # ACK stalls (e.g. "acked 35, need 52") on larger gcodes.
+    for ch in api.chans:
+        ch.max_in_flight = 12
+        ch.timeout = timedelta(seconds=0.35)
+
     log.info("Requesting file transfer..")
     try:
         api.send_xzyh(
@@ -141,23 +147,50 @@ def _exclusive_send_file(api, fui, data):
 
     log.info("Sending file metadata..")
     api.send_aabb(bytes(fui), frametype=FileTransfer.BEGIN, timeout=30)
-    # Wait for AABB reply on channel 1 with timeout
     _wait_aabb_ok(api, timeout=30)
 
-    log.info("Sending file contents..")
-    blocksize = 16 * 1024
+    # Smaller blocks = fewer UDP packets per write = more reliable on busy Wi‑Fi.
+    # 4 KiB payload ≈ 5 DRW packets; 16 KiB ≈ 17 packets and fails more often.
+    blocksize = 4 * 1024
     total = len(data)
+    log.info(f"Sending file contents ({total} bytes, {blocksize}-byte blocks)..")
+
     for pos, chunk in cli.util.split_chunks(data, blocksize):
-        api.send_aabb(chunk, frametype=FileTransfer.DATA, pos=pos, timeout=45)
-        _wait_aabb_ok(api, timeout=45)
-        if pos == 0 or (pos + len(chunk)) % (256 * 1024) < blocksize or (pos + len(chunk)) >= total:
-            done = pos + len(chunk)
+        _send_data_chunk_with_retry(api, chunk, pos, attempts=4)
+
+        done = pos + len(chunk)
+        if pos == 0 or done % (256 * 1024) < blocksize or done >= total:
             log.info(f"Upload progress: {done}/{total} ({100 * done // max(total, 1)}%)")
+
+        # Tiny pacing so the printer's PPPP stack can catch up on long jobs
+        if done % (64 * 1024) < blocksize:
+            time.sleep(0.02)
 
     log.info("File upload complete. Requesting print start of job.")
     api.send_aabb(b"", frametype=FileTransfer.END, timeout=30)
     _wait_aabb_ok(api, timeout=30)
     log.info("Successfully sent print job")
+
+
+def _send_data_chunk_with_retry(api, chunk, pos, attempts=4):
+    """Send one DATA AABB; retry the same chunk on DRW ACK timeout."""
+    last_err = None
+    for attempt in range(1, attempts + 1):
+        try:
+            # 4KiB + header is small; 30s is plenty if the link is alive
+            api.send_aabb(chunk, frametype=FileTransfer.DATA, pos=pos, timeout=30)
+            _wait_aabb_ok(api, timeout=30)
+            return
+        except (TimeoutError, ConnectionError) as E:
+            last_err = E
+            log.warning(
+                f"Chunk @ {pos} failed (attempt {attempt}/{attempts}): {E}"
+            )
+            time.sleep(0.15 * attempt)
+    raise ConnectionError(
+        f"Upload stalled at byte {pos} after {attempts} tries: {last_err}. "
+        f"Usually Wi‑Fi packet loss or printer busy — retry the send."
+    ) from last_err
 
 
 def _wait_aabb_ok(api, timeout=30):
@@ -227,6 +260,7 @@ def upload_file_to_printer(app, file):
     ft = app.svc.svcs.get("filetransfer") if getattr(app, "svc", None) else None
 
     api = None
+    last_err = None
     try:
         _force_stop_service(ft, "filetransfer", timeout=3)
         _force_stop_service(vq, "videoqueue", timeout=5)
@@ -238,8 +272,35 @@ def upload_file_to_printer(app, file):
         config = app.config["config"]
         printer_index = app.config.get("printer_index", 0)
 
-        api = _exclusive_pppp_connect(config, printer_index, timeout=20)
-        _exclusive_send_file(api, fui, data)
+        # Full-transfer retries: large gcodes (~5–10 MB) occasionally hit Wi‑Fi
+        # ACK loss mid-stream; a clean reconnect often succeeds on try 2.
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            try:
+                if api is not None:
+                    try:
+                        api.running = False
+                        api.stop()
+                    except Exception:
+                        pass
+                    api = None
+
+                if attempt > 1:
+                    log.warning(f"Retrying full upload (attempt {attempt}/{max_attempts})..")
+                    time.sleep(1.0 * attempt)
+
+                api = _exclusive_pppp_connect(config, printer_index, timeout=20)
+                _exclusive_send_file(api, fui, data)
+                last_err = None
+                break
+            except (PPPPError, ConnectionError, TimeoutError, OSError) as E:
+                last_err = E
+                log.error(f"Upload attempt {attempt}/{max_attempts} failed: {E}")
+                if attempt >= max_attempts:
+                    raise
+
+        if last_err is not None:
+            raise last_err
 
     except PPPPError as E:
         log.error(f"Could not send print job: {E}")

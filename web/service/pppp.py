@@ -138,6 +138,12 @@ class PPPPService(Service):
             # Restart with holdoff — do not tight-loop.
             log.warning(f"{self.name}: printer closed PPPP session; will reconnect")
             raise ServiceRestartSignal()
+        except OSError as E:
+            # WinError 10038 etc. when socket was closed for exclusive upload — expected
+            if not hasattr(self, "_api"):
+                return
+            log.debug(f"{self.name}: socket error during stop/reconnect: {E}")
+            raise ServiceRestartSignal()
         except ConnectionError as E:
             log.warning(f"{self.name}: PPPP connection error: {E}")
             raise ServiceRestartSignal()
