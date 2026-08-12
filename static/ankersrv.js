@@ -160,9 +160,11 @@ $(function () {
      * @returns {string} Formatted time string
      */
     function getTime(totalseconds) {
-        const hours = Math.floor(totalseconds / 3600);
-        const minutes = Math.floor((totalseconds % 3600) / 60);
-        const seconds = totalseconds % 60;
+        // Guard NaN / missing values
+        const sec = Math.max(0, Math.floor(Number(totalseconds) || 0));
+        const hours = Math.floor(sec / 3600);
+        const minutes = Math.floor((sec % 3600) / 60);
+        const seconds = sec % 60;
 
         const timeString =
             `${hours.toString().padStart(2, "0")}:` +
@@ -170,6 +172,21 @@ $(function () {
             `${seconds.toString().padStart(2, "0")}`;
 
         return timeString;
+    }
+
+    /**
+     * MQTT commandType 1001 field `time` is remaining MILLISECONDS, not seconds.
+     * Observed live (bigminer / F-044): raw 9472157 rendered as "2631:07:34"
+     * (~110 days) for a job with ~2.6h left. Convert to whole seconds for getTime().
+     * @param {number} timeMs
+     * @returns {number} seconds
+     */
+    function remainingSecondsFrom1001(timeMs) {
+        const n = Number(timeMs);
+        if (!Number.isFinite(n) || n <= 0) {
+            return 0;
+        }
+        return Math.floor(n / 1000);
     }
 
     /**
@@ -352,9 +369,13 @@ $(function () {
             const data = JSON.parse(ev.data);
             if (data.commandType == 1001) {
                 // Returns Print Details
+                // Field units (live capture F-044 / bigminer@0595a83):
+                //   time      = remaining MILLISECONDS (re-estimate; can rise or fall)
+                //   totalTime = pre-print estimate (minutes-ish), then elapsed SECONDS while printing
+                //   progress  = hundredths of a percent (10000 = 100%)
                 $("#print-name").text(data.name);
                 $("#time-elapsed").text(getTime(data.totalTime));
-                $("#time-remain").text(getTime(data.time));
+                $("#time-remain").text(getTime(remainingSecondsFrom1001(data.time)));
                 const progress = getPercentage(data.progress);
                 $("#progressbar").attr("aria-valuenow", progress);
                 $("#progressbar").attr("style", `width: ${progress}%`);
