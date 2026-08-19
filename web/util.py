@@ -284,6 +284,14 @@ def upload_file_to_printer(app, file):
     if not data:
         raise ConnectionError("Empty file - nothing to upload")
 
+    # Orca footer has human "estimated printing time"; M5 wants ;TIME:seconds
+    # near G28 or the panel/eufyMake show +1000h-style nonsense.
+    try:
+        from cli.gcode_meta import inject_ankermake_print_meta
+        data = inject_ankermake_print_meta(data)
+    except Exception as E:
+        log.debug(f"gcode TIME/LAYER_COUNT inject skipped: {E}")
+
     fui = FileUploadInfo.from_data(
         data, filename, user_name=user_name, user_id="-", machine_id="-"
     )

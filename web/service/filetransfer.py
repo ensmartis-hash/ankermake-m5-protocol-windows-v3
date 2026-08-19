@@ -72,6 +72,11 @@ class FileTransferService(Service):
 
         data = fd.read()
         filename = getattr(fd, "filename", None) or getattr(fd, "name", "upload.gcode")
+        try:
+            from cli.gcode_meta import inject_ankermake_print_meta
+            data = inject_ankermake_print_meta(data)
+        except Exception as E:
+            log.debug(f"{self.name}: gcode TIME inject skipped: {E}")
         fui = FileUploadInfo.from_data(data, filename, user_name=user_name, user_id="-", machine_id="-")
         log.info(f"Going to upload {fui.size} bytes as {fui.name!r}")
 

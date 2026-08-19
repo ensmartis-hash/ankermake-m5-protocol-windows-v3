@@ -260,7 +260,14 @@ def pppp_print_file(env, file, no_act):
     api = cli.pppp.pppp_open(env.config, env.printer_index, dumpfile=env.pppp_dump)
 
     data = file.read()
-    fui = FileUploadInfo.from_file(file.name, user_name="ankerctl", user_id="-", machine_id="-")
+    try:
+        from cli.gcode_meta import inject_ankermake_print_meta
+        data = inject_ankermake_print_meta(data)
+    except Exception as E:
+        log.debug(f"gcode TIME inject skipped: {E}")
+    fui = FileUploadInfo.from_data(
+        data, file.name, user_name="ankerctl", user_id="-", machine_id="-"
+    )
     log.info(f"Going to upload {fui.size} bytes as {fui.name!r}")
     try:
         cli.pppp.pppp_send_file(api, fui, data)
