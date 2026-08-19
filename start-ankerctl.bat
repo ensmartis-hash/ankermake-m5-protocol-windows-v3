@@ -8,6 +8,9 @@ echo  Open: http://localhost:4470
 echo  Keep this window open while printing from Orca.
 echo  Close this window to stop ankerctl.
 echo.
+echo  Tip: After the PC wakes from sleep, click Test in Orca once
+echo  (or open the web UI). ankerctl will refresh PPPP automatically.
+echo.
 :loop
 python -u ankerctl.py webserver run --host 0.0.0.0 --port 4470
 echo.

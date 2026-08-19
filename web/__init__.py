@@ -288,9 +288,17 @@ def app_api_version():
     """
     Returns the version details of api and server as dictionary
 
-    Returns:
-        A dictionary containing version details of api and server
+    Orca Slicer hits this for "Test connection". After PC sleep, HTTP still
+    works but PPPP is often dead — refresh services here so the next upload
+    does not require manually restarting the ankerctl batch window.
     """
+    try:
+        if app.config.get("login") and getattr(app, "svc", None) and app.svc.svcs:
+            from web.sleep_watch import ensure_services_fresh
+            ensure_services_fresh(app, reason="api/version")
+    except Exception as E:
+        log.debug(f"ensure_services_fresh on /api/version: {E}")
+
     return {"api": "0.1", "server": "1.9.0", "text": "OctoPrint 1.9.0"}
 
 
@@ -599,6 +607,13 @@ def webserver(config, printer_index, host, port, insecure=False, **kwargs):
         if cfg.printers:
             register_services(app)
             start_persistent_services(app)
+        app.config.setdefault("needs_reconnect", False)
+        app.config.setdefault("last_sleep_gap", None)
+        try:
+            from web.sleep_watch import start_sleep_watch
+            start_sleep_watch(app)
+        except Exception as E:
+            log.warning(f"Sleep/wake watcher not started: {E}")
         # threaded=True is required so Orca/OctoPrint uploads are not blocked by
         # open browser websocket connections (mqtt/video/pppp-state).
         app.run(host=host, port=port, threaded=True)

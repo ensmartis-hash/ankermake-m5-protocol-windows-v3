@@ -28,7 +28,8 @@ On current eufyMake / M5 V3 setups we observed:
 | Websockets | Correct `ws://` URLs; longer stream timeouts |
 | Channel I/O | Write ACK timeouts; non-blocking frame parse (avoid deadlocks) |
 | Windows helpers | `start-ankerctl.bat`, `start-ankerctl.ps1`, `login-ankerctl.ps1` |
-| Large uploads | Smaller PPPP chunks, limited in-flight packets, full-session retries |
+| Large uploads | Adaptive blocks **32→16→8→4 KiB** (fast first, slower on ACK failure) |
+| After PC sleep | Detect wake gap; refresh PPPP/MQTT on next `/api/version` (Orca Test) or upload |
 | Remaining time UI | MQTT `1001.time` is **milliseconds** — divide by 1000 before display (port of [bigminer@0595a83](https://github.com/bigminer/ankermake-m5-protocol/commit/0595a83b4a0004db5642ac9d6f8e0e000f421c83)); see [mqtt-1001-fields.md](documentation/mqtt-1001-fields.md) |
 
 ## Transfer safety (UDP is not "no integrity")
